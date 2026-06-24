@@ -1,25 +1,33 @@
-
 use crate::fns::*;
 
 mod fns;
 
-
 fn main() {
     println!("Hello, world!");
 
-    loop{
+    loop {
         let cmd = read_input("crabby🦀> ");
+        let mut prev_cmd = None;
 
-        let cmd: Vec<String> = process_input(cmd);
+        let mut commands = cmd.trim().split(" | ").peekable();
 
-        match cmd.first().map(|s| s.as_str()) {
-            Some("exit") => break,
-            Some("cd") => handle_cd(&cmd),
-            Some(_) => process_cmd(&cmd),
-            _ => println!("Unknown Command")
-            
+        while let Some(command) = commands.next() {
+            let mut cmd = command.trim().split_whitespace().into_iter().peekable();
+
+            let command = cmd.next().expect("Unable to unwrap the command");
+            let mut args = cmd;
+
+            match command {
+                "exit" => {
+                    println!("EXITTING...");
+                    return;
+                }
+                "cd" => {
+                    handle_cd(args.next())
+                        prev_cmd = None;
+                },
+                command => process_cmd(command, args, prev_cmd, &mut commands),
+            }
         }
-
     }
-        println!("EXITTING CRABBY...");
 }

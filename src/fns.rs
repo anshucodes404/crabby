@@ -1,7 +1,9 @@
-use std::io::{self, Write};
 use std::env;
+use std::io::{self, Write};
 use std::path::Path;
-use std::process::{Command};
+use std::process::{Command, Stdio, Child};
+use self::iter::Peekable;
+use std::iter;
 
 pub fn read_input(prompt: &str) -> String {
     let stdin = io::stdin();
@@ -12,10 +14,12 @@ pub fn read_input(prompt: &str) -> String {
     stdout.flush().expect("Failed to flush the output");
 
     loop {
+        // PERF: clear before each read so empty-input retries don't keep appending
+        cmd.clear();
         stdin.read_line(&mut cmd).expect("Failed to read input");
 
         let cmd = cmd.trim();
-        
+
         if cmd.len() == 0 {
             continue;
         } else {
@@ -24,17 +28,10 @@ pub fn read_input(prompt: &str) -> String {
     }
 }
 
-pub fn process_input(input: String) -> Vec<String> {
-    if input.len() == 0 {
-        return Vec::new();
-    } 
-    input.split_whitespace().map(|s| s.to_string()).collect()
-}
-
-pub fn handle_cd(input: &[String]) {
-    let new_dir = match input.get(1) {
+pub fn handle_cd(directory: Option<&str>) {
+    let new_dir = match directory {
         Some(dir) => dir,
-        None => &".".to_string()
+        None => ".",
     };
 
     let full_path = Path::new(new_dir);
@@ -43,21 +40,26 @@ pub fn handle_cd(input: &[String]) {
     }
 }
 
-pub fn process_cmd(input: &[String]) {
-    let mut cmd = Command::new(&input[0])
-        .args(&input[1..])
-        .spawn();
+pub fn process_cmd<'a, I, J>(cmd: &str, args: I, prev_cmd: Option<&str>, commands: &mut Peekable<J>)
+where
+    I: Iterator<Item = &'a str>,
+    J: Iterator<Item = &'a str>,
+{
+
+    let stdin = prev_cmd.map_or(Stdio::inherit(), |output: Child| Stdio::from(output.stdout.unwrap()));
+
+    
+
+    let mut cmd = Command::new(cmd).args(args).stdin(stdin).spawn();
 
     match &mut cmd {
-            Ok(child) => {
-                if let Err(e) = child.wait() {
-                    eprintln!("Command ran, but failed to exit cleanly: {}", e);
-                }
+        Ok(child) => {
+            if let Err(e) = child.wait() {
+                eprintln!("Command ran, but failed to exit cleanly: {}", e);
             }
-            Err(e) => {
-                eprintln!("Failed to execute command: {}", e);
-            }
-        };
-        
-    
+        }
+        Err(e) => {
+            eprintln!("Failed to execute command: {}", e);
+        }
+    };
 }
