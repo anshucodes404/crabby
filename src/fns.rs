@@ -1,9 +1,9 @@
+use self::iter::Peekable;
 use std::env;
 use std::io::{self, Write};
-use std::path::Path;
-use std::process::{Command, Stdio, Child};
-use self::iter::Peekable;
 use std::iter;
+use std::path::Path;
+use std::process::{Child, Command, Stdio};
 
 pub fn read_input(prompt: &str) -> String {
     let stdin = io::stdin();
@@ -14,7 +14,6 @@ pub fn read_input(prompt: &str) -> String {
     stdout.flush().expect("Failed to flush the output");
 
     loop {
-        // PERF: clear before each read so empty-input retries don't keep appending
         cmd.clear();
         stdin.read_line(&mut cmd).expect("Failed to read input");
 
@@ -40,26 +39,37 @@ pub fn handle_cd(directory: Option<&str>) {
     }
 }
 
-pub fn process_cmd<'a, I, J>(cmd: &str, args: I, prev_cmd: Option<&str>, commands: &mut Peekable<J>)
+pub fn process_cmd<'a, I, J>(
+    cmd: &str,
+    args: I,
+    prev_cmd: Option<Child>,
+    commands: &mut Peekable<J>,
+) -> Option<Child>
 where
     I: Iterator<Item = &'a str>,
     J: Iterator<Item = &'a str>,
 {
+    let stdin = match prev_cmd {
+        Some(mut child) => Stdio::from(child.stdout.take().expect("no stdout on previous child")),
+        None => Stdio::inherit(),
+    };
 
-    let stdin = prev_cmd.map_or(Stdio::inherit(), |output: Child| Stdio::from(output.stdout.unwrap()));
+    let stdout = if commands.peek().is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::inherit()
+    };
 
-    
-
-    let mut cmd = Command::new(cmd).args(args).stdin(stdin).spawn();
-
-    match &mut cmd {
-        Ok(child) => {
-            if let Err(e) = child.wait() {
-                eprintln!("Command ran, but failed to exit cleanly: {}", e);
-            }
-        }
+    match Command::new(cmd)
+        .args(args)
+        .stdin(stdin)
+        .stdout(stdout)
+        .spawn()
+    {
+        Ok(child) => Some(child),
         Err(e) => {
             eprintln!("Failed to execute command: {}", e);
+            None
         }
-    };
+    }
 }

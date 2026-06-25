@@ -1,3 +1,5 @@
+use std::process::Child;
+
 use crate::fns::*;
 
 mod fns;
@@ -7,7 +9,7 @@ fn main() {
 
     loop {
         let cmd = read_input("crabby🦀> ");
-        let mut prev_cmd = None;
+        let mut prev_cmd: Option<Child> = None;
 
         let mut commands = cmd.trim().split(" | ").peekable();
 
@@ -23,11 +25,16 @@ fn main() {
                     return;
                 }
                 "cd" => {
-                    handle_cd(args.next())
-                        prev_cmd = None;
-                },
-                command => process_cmd(command, args, prev_cmd, &mut commands),
+                    handle_cd(args.peek().copied());
+                    prev_cmd = None;
+                }
+                command => {
+                    prev_cmd = process_cmd(command, args, prev_cmd, &mut commands);
+                }
             }
+        }
+        if let Some(mut child) = prev_cmd {
+            let _ = child.wait();
         }
     }
 }
